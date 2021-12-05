@@ -1,4 +1,7 @@
 {
 	"ver":"v0.0.1",
-	"port":8000
+	"network": {
+		"hostname":"localhost",
+		"port":8000
+	}
 }
