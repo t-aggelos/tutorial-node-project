@@ -12,18 +12,25 @@
  * Server.
  */
    let app = new framework.ServerInstance(defaults.network.port, defaults.network.hostname);
+   let apiRoute = '/api/'; // the root directory for the api to bind on
 
- app.server.on('connection', (req, res) => {
+ app.event.on('end_connection', res => res.end());
+ app.event.on('connection',(req, res) => 
+ {
     req.contentCode = 200;
- });    
-
- app.use('/', (req, res) => {
-    res.sendFile('/../public/index.html');
+    console.log('request on route', req.url);
  });
 
- app.use('^?', (req, res) => {
-    res.setHeader('Content-Type', 'text/plain')
-    res.write(`Can't GET: ${req.url} - Is an appropriate route missing or is the server too slow?`);
+ app.use(apiRoute + 'get/^*',(req, res) => {
+    console.log(app.routes, req.url, (__dirname + req.url).split('get')[1]);
+    app.sendFile((__dirname + req.url).split(apiRoute)[1], req, res);
+    res.end();
  });
+
+ app.use(apiRoute, (req, res) => {
+    app.sendFile(__dirname + '/public/index.html', req, res);
+ }) 
+
+
 
 app.listen(() => console.log(`${defaults.ver} Running on ${defaults.network.hostname}:${defaults.network.port}`));

@@ -2,66 +2,105 @@ const fs = require('fs');
 const http = require('http');
 const EventEmitter = require('events');
 
-let sendFile = function(src, req, res) {
-         try {
-                let f = fs.readFileSync(__dirname + src);
-                res.setHeader('Content-Type', 'text/html');
-                res.write(f);
-         }catch (error) 
-         {
-                res.contentCode = 404;
-                res.write(`
-                <body style='background-color:black;color:white;'>
-                <p style='position:absolute;top:39%;left:15%;'> 
-                    404 no context found for route ${__dirname} 
-                </p>
-                </body>`);
-
-                console.log(error);
-           }
-};
-
 class ServerInstance {
 	// existing routers
 	routes = {};
 	//all special symbols linked with the status code.
 	symbols = 
 	{
-		'^?': 404, //used for unknown 
+		unknown: '^?', // used for unknown variables
+		merge: '^!', // merge everything after  last string 
+		everything: '^*' // everything after last string <-- TODO
 	};
+	prefixes = {}
 
 
 	constructor(port, hostname) {
-		this.server = new EventEmitter();
-		this.instance = http.createServer((req, res) => {
-			// adding extra stuff
-			res.sendFile = src => sendFile(src, req, res);
-
-			if (this.routes[req.url] != undefined) { 
+		this.event = new EventEmitter();
+		this.server = http.createServer((req, res) => 
+		{
+			this.event.emit('connection', req, res);
+			//call the existing route
+		
+			if (this.routes[req.url]) { 
 				this.routes[req.url](req, res);
-			}else if (this.routes['^?'] != undefined) 
+
+			}else if (this.routes[this.symbols.unknown]) {
+				this.routes[this.symbols.unknown](req, res);
+			}else if (this.routes[this.symbols.everything] {
+
+            }else
 			{
-				res.contentCode = this.symbols['^?']
-				this.routes['^?'](req, res);
-			}else {
-				console.warn('please set an appropriate fallback route.');
+				res.contentCode = 404;
+				res.setHeader('Content-Type', 'text/plain')
+   				res.write(`Can't GET: ${req.url} - Is an appropriate route missing or is the server too slow?`);
+   				res.end();
 			}
-			
-			this.server.emit('connection', req, res);
-			res.end();
 		});
 
 		this.hostname = hostname;
 		this.port = port;
 	}
 
+	sendFile(src, req, res) {
+        console.log('Attempting to send ' + src + '.');
+		res.setHeader('Content-Type', `text/${src.split('.')[1] || 'plain'}`);
+			fs.readFile(src,(err, byte) => 
+				{
+					if(err) {
+					  	res.write(err.stack);
+					  	console.log(err, '!!!! SKIPPING error');
+					  	this.event.emit('end_connection', res);
+					}else 
+					{
+					  	res.write(byte);
+					  	this.event.emit('end_connection', res);
+					}
+
+			});
+	}
+
 	listen(middleware) {
-		this.instance.listen(this.port, this.hostname, middleware);
+		this.server.listen(this.port, this.hostname, middleware);
 	}
 
 	use(url, router) {
-		this.routes[url] = router;
-		this.server.on(url, router);
+		let associates;
+		let prefix; 
+		if (url.includes(this.symbols.merge)) {
+			let pos = url.indexOf(this.symbols.merge);
+
+			//
+			// ALL AFTER "KEYWORD" FUNCTIONALITY.
+			//
+
+			// every route after this.symbols.merge
+			let part = url.slice(pos + this.symbols.merge.length).split('/'); 
+
+			// the route before.
+			prefix = url.split(this.symbols.merge)[0];
+
+			// every route after this.symbols.merge in a string	
+			let associates = prefix + part[0];
+
+			//we add "word by word" the route endpoints.
+			for (let i = 1; i <= part.length; i++) { //we start by 1 because we've already added the first part above.
+
+							// we remove the last '/' (because browser)
+				this.routes[associates.substring(0, associates.length - 1)] = router; // and associate the middleware with each new route.
+				this.routes[associates] = router; // and associate the middleware with each new route.
+				associates += part[i] + '/'; 
+			}
+
+		}else if (url.includes(this.symbols.unknown)) 
+		{
+			this.routes[this.symbols.unknown] = router;
+		}else if (url.includes(this.symbols.everything)) {
+			// TODO
+            prefix = url.split('^*')[1];
+            this.routes[prefix] = router;
+		}
+		this.event.on(url, router);
 	}
 }
 
